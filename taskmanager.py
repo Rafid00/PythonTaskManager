@@ -7,7 +7,7 @@ def get_system_info():
     cpu_percent = psutil.cpu_percent()
     memory = psutil.virtual_memory()
     network = psutil.net_io_counters()
-    processes = psutil.process_iter()
+    processes = psutil.process_iter(attrs=['pid', 'name', 'username', 'cpu_percent', 'memory_percent'])
 
     return cpu_percent, memory, network, processes
 
@@ -29,7 +29,7 @@ def update_system_info():
 
     # Populate the process list with the current running processes
     for process in processes:
-        process_info = process.as_dict(attrs=['pid', 'name', 'username', 'cpu_percent', 'memory_percent'])
+        process_info = process.info
         process_list.insert("", "end", values=(
             process_info['pid'],
             process_info['name'],
@@ -39,12 +39,44 @@ def update_system_info():
         ))
 
     # Schedule the next update in 1 second
-    root.after(1000, update_system_info)
+    root.after(5000, update_system_info)
+
+def end_task():
+    # Get the selected item from the process list
+    selected_item = process_list.selection()
+    if selected_item:
+        pid = int(process_list.item(selected_item, "values")[0])  # Convert PID to integer
+
+        try:
+            # Terminate the selected process
+            process = psutil.Process(pid)
+            process.terminate()
+        except psutil.NoSuchProcess:
+            pass
+
+
+def search_process():
+    query = search_entry.get().lower()
+    process_list.delete(*process_list.get_children())
+
+    for process in processes:
+        process_info = process.info
+        process_name = process_info['name'].lower()
+        
+        if query in process_name:
+            process_list.insert("", "end", values=(
+                process_info['pid'],
+                process_info['name'],
+                process_info['username'],
+                f'{process_info["cpu_percent"]:.2f}%',
+                f'{process_info["memory_percent"]:.2f}%'
+            ))
+
 
 # Create the root window
 root = tk.Tk()
 root.title("Task Manager")
-root.geometry("1000x600") 
+root.geometry("1000x600")
 
 # Create labels to display system information
 cpu_label = ttk.Label(root, text="CPU Usage: ")
@@ -73,6 +105,14 @@ process_list.pack(expand=True, fill=tk.BOTH)  # Make the task window expand to f
 
 # Start updating system information
 update_system_info()
+
+# Create the "End Task" button
+end_task_button = ttk.Button(root, text="End Task", command=end_task, style="White.TButton")
+end_task_button.pack(side=tk.RIGHT, padx=10, pady=10)
+
+# Configure the style for the "End Task" button
+style = ttk.Style()
+style.configure("White.TButton", foreground="black", background="white", font=("Helvetica", 11, "bold"))
 
 # Run the main event loop
 root.mainloop()
